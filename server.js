@@ -179,6 +179,11 @@ app.get("/getApplicant/:passId", async (req, res) => {
   }
 });
 
+app.get("/check-uri", (req, res) => {
+  res.send("MONGO_URI = " + JSON.stringify(process.env.MONGO_URI));
+});
+
+
 /* ===========================================================
    5️⃣ Book Ticket (POST)
    =========================================================== */
