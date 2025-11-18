@@ -205,87 +205,88 @@
     <button class="submit-btn" type="submit">Submit</button>
   </form>
 
-  <script>
-    // Captcha generator
-    function generateCaptcha() {
-      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-      let captcha = "";
-      for (let i = 0; i < 6; i++) captcha += chars.charAt(Math.floor(Math.random() * chars.length));
-      document.getElementById("captchaCode").innerText = captcha;
+<script>
+  // Captcha generator
+  function generateCaptcha() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    let captcha = "";
+    for (let i = 0; i < 6; i++) captcha += chars.charAt(Math.floor(Math.random() * chars.length));
+    document.getElementById("captchaCode").innerText = captcha;
+  }
+
+  // Age calculator
+  function calculateAge() {
+    let dob = document.getElementById("dob").value;
+    if (!dob) return;
+    let dobDate = new Date(dob);
+    let today = new Date();
+    let years = today.getFullYear() - dobDate.getFullYear();
+    let months = today.getMonth() - dobDate.getMonth();
+    let days = today.getDate() - dobDate.getDate();
+    if (days < 0) { months--; days += new Date(today.getFullYear(), today.getMonth(), 0).getDate(); }
+    if (months < 0) { years--; months += 12; }
+    document.getElementById("ageYears").value = years;
+    document.getElementById("ageMonths").value = months;
+    document.getElementById("ageDays").value = days;
+  }
+
+  // District counters
+  const districtCounters = {
+    Hyderabad: ["RTC Hyderabad", "MGBS Counter"],
+    Warangal: ["RTC Warangal"],
+    Karimnagar: ["RTC Karimnagar"],
+    Adilabad: ["RTC Adilabad"],
+    "Bhadradri Kothagudem": ["RTC Bhadradri Kothagudem"]
+  };
+  document.getElementById("districtSelect").addEventListener("change", function() {
+    let district = this.value;
+    let counterSelect = document.getElementById("counterOptions");
+    counterSelect.innerHTML = '<option value="">--- Select Counter ---</option>';
+    if (district && districtCounters[district]) {
+      districtCounters[district].forEach(c => {
+        let opt = document.createElement("option");
+        opt.textContent = c;
+        opt.value = c;
+        counterSelect.appendChild(opt);
+      });
+    }
+  });
+
+  // Form submission with fetch
+  document.getElementById("applicationForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    // Captcha check
+    const entered = document.getElementById("captchaInput").value.trim();
+    const actual = document.getElementById("captchaCode").innerText.trim();
+    if (entered !== actual) {
+      alert("❌ Captcha does not match!");
+      generateCaptcha();
+      return;
     }
 
-    // Age calculator
-    function calculateAge() {
-      let dob = document.getElementById("dob").value;
-      if (!dob) return;
-      let dobDate = new Date(dob);
-      let today = new Date();
-      let years = today.getFullYear() - dobDate.getFullYear();
-      let months = today.getMonth() - dobDate.getMonth();
-      let days = today.getDate() - dobDate.getDate();
-      if (days < 0) { months--; days += new Date(today.getFullYear(), today.getMonth(), 0).getDate(); }
-      if (months < 0) { years--; months += 12; }
-      document.getElementById("ageYears").value = years;
-      document.getElementById("ageMonths").value = months;
-      document.getElementById("ageDays").value = days;
-    }
-
-    // District counters
-    const districtCounters = {
-      Hyderabad: ["RTC Hyderabad", "MGBS Counter"],
-      Warangal: ["RTC Warangal"],
-      Karimnagar: ["RTC Karimnagar"],
-      Adilabad: ["RTC Adilabad"],
-      "Bhadradri Kothagudem": ["RTC Bhadradri Kothagudem"]
-    };
-    document.getElementById("districtSelect").addEventListener("change", function() {
-      let district = this.value;
-      let counterSelect = document.getElementById("counterOptions");
-      counterSelect.innerHTML = '<option value="">--- Select Counter ---</option>';
-      if (district && districtCounters[district]) {
-        districtCounters[district].forEach(c => {
-          let opt = document.createElement("option");
-          opt.textContent = c;
-          opt.value = c;
-          counterSelect.appendChild(opt);
-        });
-      }
-    });
-
-    // Form submission with fetch
-    document.getElementById("applicationForm").addEventListener("submit", async function(e) {
-      e.preventDefault();
-
-      // Captcha check
-      const entered = document.getElementById("captchaInput").value.trim();
-      const actual = document.getElementById("captchaCode").innerText.trim();
-      if (entered !== actual) {
-        alert("❌ Captcha does not match!");
+    const formData = new FormData(this);
+    try {
+      const response = await fetch("/apply", {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+      if (result.success) {
+        alert("✅ Application submitted!");
+        this.reset();
         generateCaptcha();
-        return;
+      } else {
+        alert("❌ Failed: " + result.error);
       }
+    } catch (err) {
+      alert("❌ Error submitting form: " + err.message);
+    }
+  });
 
-      const formData = new FormData(this);
-      try {
-        const response = await fetch("http://localhost:5000/apply", {
-          method: "POST",
-          body: formData
-        });
-        const result = await response.json();
-        if (result.success) {
-          alert("✅ Application submitted!");
-          this.reset();
-          generateCaptcha();
-        } else {
-          alert("❌ Failed: " + result.error);
-        }
-      } catch (err) {
-        alert("❌ Error submitting form: " + err.message);
-      }
-    });
+  // Init captcha
+  generateCaptcha();
+</script>
 
-    // Init captcha
-    generateCaptcha();
-  </script>
 </body>
 </html>
