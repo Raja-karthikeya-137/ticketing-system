@@ -145,38 +145,44 @@
   </div>
 
   <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-  <script>
-    async function loadApplicant() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const id = urlParams.get("id");
-      if (!id) return alert("❌ No applicant ID provided in URL");
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script>
+  async function loadApplicant() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const id = urlParams.get("id");
+    if (!id) return alert("❌ No applicant ID provided in URL");
 
-      const res = await fetch(`http://localhost:5000/applicant/${id}`);
-      const data = await res.json();
-      if (!data.success) return alert("❌ Applicant not found");
+    // ✅ Fetch applicant from Render backend
+    const res = await fetch(`/applicant/${id}`);
+    const data = await res.json();
+    if (!data.success) return alert("❌ Applicant not found");
 
-      const a = data.applicant;
-      document.getElementById("name").textContent = a.name;
-      document.getElementById("aadhar").textContent = a.aadhar;
-      document.getElementById("phone").textContent = a.whatsapp || a.phone;
-      document.getElementById("dob").textContent = a.dob;
-      document.getElementById("district").textContent = a.district;
-      document.getElementById("passId").textContent = a.passId;
+    const a = data.applicant;
 
-      if (a.photo) {
-        const photoPath = a.photo.startsWith("/") ? a.photo.slice(1) : a.photo;
-        document.getElementById("photo").src = `http://localhost:5000/${photoPath}`;
-      }
+    // Fill card details
+    document.getElementById("name").textContent = a.name;
+    document.getElementById("aadhar").textContent = a.aadhar;
+    document.getElementById("phone").textContent = a.whatsapp || a.phone;
+    document.getElementById("dob").textContent = a.dob;
+    document.getElementById("district").textContent = a.district;
+    document.getElementById("passId").textContent = a.passId;
 
-      QRCode.toCanvas(document.getElementById("qr"), a.passId, { width: 80 }, err => {
-        if (err) console.error(err);
-      });
+    // ✅ Load photo from Render uploads folder
+    if (a.photo) {
+      let photoPath = a.photo.startsWith("/") ? a.photo : `/${a.photo}`;
+      document.getElementById("photo").src = photoPath;
     }
 
-    document.getElementById("printBtn").addEventListener("click", () => window.print());
+    // Generate QR code
+    QRCode.toCanvas(document.getElementById("qr"), a.passId, { width: 80 }, err => {
+      if (err) console.error(err);
+    });
+  }
 
-    loadApplicant();
-  </script>
+  document.getElementById("printBtn").addEventListener("click", () => window.print());
+
+  loadApplicant();
+</script>
+
 </body>
 </html>
