@@ -6,12 +6,15 @@ const { MongoClient, ObjectId } = require("mongodb");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const QRCode = require("qrcode");   // ✅ QR Code library
+const QRCode = require("qrcode");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// === Serve frontend ===
+app.use(express.static("public"));
 
 // --- Ensure uploads folder exists ---
 const uploadDir = path.join(__dirname, "uploads");
@@ -19,12 +22,20 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-// Serve uploaded files (public)
+// Serve uploaded files
 app.use("/uploads", express.static(uploadDir));
 
-// --- MongoDB connection ---
-const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017";
-const client = new MongoClient(uri);
+/* ===========================================================
+   MongoDB Connection (required for Render)
+   =========================================================== */
+
+const uri = process.env.MONGO_URI;   // ❗ MUST COME FROM ENV
+console.log("🔎 Using Mongo URI:", uri ? "Loaded" : "MISSING");
+
+const client = new MongoClient(uri, {
+  serverApi: { version: "1", strict: true, deprecationErrors: true }
+});
+
 let applications, tickets;
 
 async function connectDB() {
@@ -32,39 +43,39 @@ async function connectDB() {
     await client.connect();
     const db = client.db("mahalakshmiBusDB");
     applications = db.collection("applications");
-    tickets = db.collection("tickets"); // ✅ new collection for tickets
-    console.log("✅ Connected to MongoDB");
+    tickets = db.collection("tickets");
+    console.log("✅ Connected to MongoDB Atlas");
   } catch (err) {
     console.error("❌ Failed to connect MongoDB:", err.message);
-    process.exit(1);
   }
 }
 connectDB();
 
-// --- File upload setup ---
+/* ===========================================================
+   File upload setup
+   =========================================================== */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
-// Function to generate 8-digit unique ID
+// Generate PASS ID
 function generateUniquePassId() {
   const randomNum = Math.floor(10000000 + Math.random() * 90000000);
   return `TSRTC-${randomNum}`;
 }
 
 /* ===========================================================
-   1️⃣ Save Application (POST)
+   1️⃣ Save Application
    =========================================================== */
 app.post(
   "/apply",
   upload.fields([{ name: "photo" }, { name: "aadharFile" }]),
   async (req, res) => {
     try {
-      if (!applications) {
-        return res.status(500).json({ error: "DB not connected yet" });
-      }
+      if (!applications)
+        return res.status(500).json({ error: "DB not connected" });
 
       const passId = generateUniquePassId();
       const qrDataUrl = await QRCode.toDataURL(passId);
@@ -72,8 +83,8 @@ app.post(
       const phoneNumber = req.body.phone || req.body.whatsapp || req.body.number;
 
       const doc = {
-        passId,                        // ✅ Store Pass ID
-        qrCode: qrDataUrl,             // ✅ Store QR Code (Base64 string)
+        passId,
+        qrCode: qrDataUrl,
         name: req.body.name,
         fatherName: req.body.fatherName,
         dob: req.body.dob,
@@ -88,7 +99,6 @@ app.post(
         whatsapp: req.body.whatsapp || phoneNumber,
         number: req.body.number || phoneNumber,
         email: req.body.email,
-        // ✅ Save only relative public paths (so frontend can fetch)
         photo: req.files?.photo ? `/uploads/${req.files.photo[0].filename}` : "",
         aadharFile: req.files?.aadharFile ? `/uploads/${req.files.aadharFile[0].filename}` : "",
         address: req.body.address,
@@ -108,91 +118,69 @@ app.post(
 
       res.json({
         success: true,
-        message: "✅ Application stored in MongoDB",
+        message: "Application stored",
         id: result.insertedId,
         passId,
         qrCode: qrDataUrl,
       });
     } catch (err) {
-      console.error("❌ Error inserting:", err.message);
-      res.status(500).json({ success: false, error: "Failed to save application" });
+      res.status(500).json({ success: false, error: err.message });
     }
   }
 );
 
 /* ===========================================================
-   2️⃣ Verify by Phone Number (GET)
+   2️⃣ Verify by Phone
    =========================================================== */
 app.get("/verify/:phone", async (req, res) => {
   try {
-    if (!applications) {
-      return res.status(500).json({ success: false, error: "DB not connected" });
-    }
-
     const phone = req.params.phone;
     const applicant = await applications.findOne({
       $or: [{ phone }, { whatsapp: phone }, { number: phone }]
     });
 
-    if (applicant) {
-      res.json({ success: true, id: applicant._id });
-    } else {
-      res.json({ success: false });
-    }
-  } catch (err) {
-    console.error("❌ Verify error:", err.message);
-    res.status(500).json({ success: false, error: "Server error" });
+    res.json(applicant ? { success: true, id: applicant._id } : { success: false });
+  } catch {
+    res.status(500).json({ success: false });
   }
 });
 
 /* ===========================================================
-   3️⃣ Fetch Applicant by Mongo _id (GET)
+   3️⃣ Get Applicant by ID
    =========================================================== */
 app.get("/applicant/:id", async (req, res) => {
   try {
-    if (!applications) {
-      return res.status(500).json({ success: false, error: "DB not connected" });
-    }
-
-    const applicant = await applications.findOne({ _id: new ObjectId(req.params.id) });
-    if (applicant) {
-      res.json({ success: true, applicant });
-    } else {
-      res.json({ success: false });
-    }
-  } catch (err) {
-    console.error("❌ Fetch error:", err.message);
-    res.status(500).json({ success: false, error: "Server error" });
+    const applicant = await applications.findOne({
+      _id: new ObjectId(req.params.id)
+    });
+    res.json(applicant ? { success: true, applicant } : { success: false });
+  } catch {
+    res.status(500).json({ success: false });
   }
 });
 
 /* ===========================================================
-   4️⃣ Fetch Applicant by Pass ID (QR Scan) (GET)
+   4️⃣ QR Scan → Fetch user by PASS ID
    =========================================================== */
 app.get("/getApplicant/:passId", async (req, res) => {
   try {
     const applicant = await applications.findOne({ passId: req.params.passId });
-    if (!applicant) return res.status(404).json({ success: false, msg: "Not found" });
+    if (!applicant) return res.status(404).json({ success: false });
     res.json(applicant);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+  } catch {
+    res.status(500).json({ success: false });
   }
 });
 
-app.get("/check-uri", (req, res) => {
-  res.send("MONGO_URI = " + JSON.stringify(process.env.MONGO_URI));
-});
-
-
 /* ===========================================================
-   5️⃣ Book Ticket (POST)
+   5️⃣ Book Ticket
    =========================================================== */
 app.post("/bookTicket", async (req, res) => {
   try {
     const { applicantId, source, destination, paymentType, amount } = req.body;
-    if (!applicantId || !source || !destination || !paymentType) {
+
+    if (!applicantId || !source || !destination || !paymentType)
       return res.json({ success: false, msg: "Missing fields" });
-    }
 
     const ticketDoc = {
       applicantId: new ObjectId(applicantId),
@@ -204,15 +192,23 @@ app.post("/bookTicket", async (req, res) => {
     };
 
     const result = await tickets.insertOne(ticketDoc);
-    res.json({ success: true, ticket: result.ops?.[0] || ticketDoc });
+    res.json({ success: true, ticket: ticketDoc });
   } catch (err) {
-    console.error("❌ Ticket booking error:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+/* ===========================================================
+   DEBUG ROUTE
+   =========================================================== */
+app.get("/check-uri", (req, res) => {
+  res.send("MONGO_URI = " + process.env.MONGO_URI);
 });
 
 /* ===========================================================
    Start Server
    =========================================================== */
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Server running at http://localhost:${PORT}`)
+);
