@@ -124,72 +124,71 @@
 
     <p id="msg" class="msg"></p>
   </div>
+<script>
+  let captchaCode = "";
 
-  <script>
-    let captchaCode = "";
+  function generateCaptcha() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    captchaCode = "";
+    for (let i = 0; i < 5; i++) {
+      captchaCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const canvas = document.getElementById("captchaCanvas");
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#800000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = "bold 22px Arial";
+    ctx.fillStyle = "white";
+    for (let i = 0; i < captchaCode.length; i++) {
+      const x = 15 + i * 18;
+      const y = 25 + Math.random() * 6;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((Math.random() - 0.5) * 0.3);
+      ctx.fillText(captchaCode[i], 0, 0);
+      ctx.restore();
+    }
+  }
 
-    function generateCaptcha() {
-      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-      captchaCode = "";
-      for (let i = 0; i < 5; i++) {
-        captchaCode += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      const canvas = document.getElementById("captchaCanvas");
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#800000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.font = "bold 22px Arial";
-      ctx.fillStyle = "white";
-      for (let i = 0; i < captchaCode.length; i++) {
-        const x = 15 + i * 18;
-        const y = 25 + Math.random() * 6;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate((Math.random() - 0.5) * 0.3);
-        ctx.fillText(captchaCode[i], 0, 0);
-        ctx.restore();
-      }
+  async function verifyForm() {
+    const phone = document.getElementById("phone").value.trim();
+    const captchaInput = document.getElementById("captchaInput").value.trim();
+    const msg = document.getElementById("msg");
+
+    if (!/^\d{10}$/.test(phone)) {
+      msg.textContent = "❌ Please enter a valid 10-digit phone number.";
+      return;
+    }
+    if (captchaInput.toUpperCase() !== captchaCode) {
+      msg.textContent = "❌ Incorrect captcha. Try again.";
+      generateCaptcha();
+      return;
     }
 
-    async function verifyForm() {
-      const phone = document.getElementById("phone").value.trim();
-      const captchaInput = document.getElementById("captchaInput").value.trim();
-      const msg = document.getElementById("msg");
+    try {
+      // ✅ Render-compatible URL
+      const res = await fetch(`/verify/${phone}`);
+      const data = await res.json();
 
-      if (!/^\d{10}$/.test(phone)) {
-        msg.textContent = "❌ Please enter a valid 10-digit phone number.";
-        return;
-      }
-      if (captchaInput.toUpperCase() !== captchaCode) {
-        msg.textContent = "❌ Incorrect captcha. Try again.";
-        generateCaptcha();
-        return;
-      }
-
-      try {
-        // ✅ Call backend to verify phone
-        const res = await fetch(`http://localhost:5000/verify/${phone}`);
-        const data = await res.json();
-
-        if (data.success) {
-          msg.style.color = "green";
-          msg.textContent = "✅ Verified! Redirecting...";
-          setTimeout(() => {
-            // Redirect to pass page with applicant id
-            window.location.href = `pass.html?id=${data.id}`;
-          }, 1500);
-        } else {
-          msg.style.color = "red";
-          msg.textContent = "❌ Phone number not registered.";
-        }
-      } catch (err) {
-        console.error(err);
+      if (data.success) {
+        msg.style.color = "green";
+        msg.textContent = "✅ Verified! Redirecting...";
+        setTimeout(() => {
+          window.location.href = `pass.html?id=${data.id}`;
+        }, 1500);
+      } else {
         msg.style.color = "red";
-        msg.textContent = "⚠️ Server error. Try again later.";
+        msg.textContent = "❌ Phone number not registered.";
       }
+    } catch (err) {
+      console.error(err);
+      msg.style.color = "red";
+      msg.textContent = "⚠️ Server error. Try again later.";
     }
+  }
 
-    window.onload = generateCaptcha;
-  </script>
+  window.onload = generateCaptcha;
+</script>
+
 </body>
 </html>
