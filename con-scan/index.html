@@ -111,7 +111,6 @@
   <div class="ticket-box" id="ticketBox"></div>
   <button onclick="confirmTicket()">Confirm & Book</button>
 </div>
-
 <script>
 const video=document.getElementById('video');
 const preview=document.getElementById('preview');
@@ -124,73 +123,133 @@ function goToPhase2(){
   const d=document.getElementById('destination').value;
   const p=document.getElementById('paymentType').value;
   const amt=document.getElementById('amount');
-  if(!s||!d||!p){alert("Fill all fields");return;}
-  if(p==="PAID"&&!amt.value){alert("Enter amount");return;}
-  journeyData={source:s,destination:d,paymentType:p,amount:p==="PAID"?Number(amt.value):0};
-  showPhase(2); startCamera();
+
+  if(!s||!d||!p){ alert("Fill all fields"); return; }
+  if(p==="PAID" && !amt.value){ alert("Enter amount"); return; }
+
+  journeyData={
+    source:s,
+    destination:d,
+    paymentType:p,
+    amount:p==="PAID" ? Number(amt.value) : 0
+  };
+
+  showPhase(2);
+  startCamera();
 }
+
 function backToPhase1(){ showPhase(1); }
-function showPhase(n){ document.querySelectorAll('.phase').forEach(p=>p.classList.remove('active')); document.getElementById('phase'+n).classList.add('active'); }
+
+function showPhase(n){
+  document.querySelectorAll('.phase').forEach(p=>p.classList.remove('active'));
+  document.getElementById('phase'+n).classList.add('active');
+}
 
 async function startCamera(){
   if(stream) return;
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject=stream; startAutoScan();
-  }catch(err){alert("Camera not accessible");console.error(err);}
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:"environment" }
+    });
+    video.srcObject = stream;
+    startAutoScan();
+  }catch(err){
+    alert("Camera not accessible");
+    console.error(err);
+  }
 }
-function stopCamera(){ if(scanInterval)clearInterval(scanInterval); if(stream){stream.getTracks().forEach(t=>t.stop());} video.srcObject=null; stream=null; }
+
+function stopCamera(){
+  if(scanInterval) clearInterval(scanInterval);
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+  }
+  video.srcObject=null;
+  stream=null;
+}
+
 function startAutoScan(){
   const ctx=preview.getContext('2d');
+
   scanInterval=setInterval(()=>{
     if(video.readyState===video.HAVE_ENOUGH_DATA){
-      preview.width=video.videoWidth; preview.height=video.videoHeight;
+      preview.width=video.videoWidth;
+      preview.height=video.videoHeight;
       ctx.drawImage(video,0,0,preview.width,preview.height);
+
       const imgData=ctx.getImageData(0,0,preview.width,preview.height);
       const code=jsQR(imgData.data,preview.width,preview.height);
-      if(code){ stopCamera(); fetchApplicant(code.data); }
+
+      if(code){
+        stopCamera();
+        fetchApplicant(code.data);
+      }
     }
   },300);
 }
 
+/* ---------------------------------------------------
+   ✔ FIXED: Uses Render backend instead of localhost
+----------------------------------------------------- */
 async function fetchApplicant(passId){
   try{
-    const res=await fetch(`http://localhost:5000/getApplicant/${passId}`);
+    const res = await fetch(`/getApplicant/${passId}`);
     if(!res.ok) throw new Error("Not found");
-    applicantData=await res.json();
-    loadTicketPreview(); showPhase(3);
+
+    applicantData = await res.json();
+    loadTicketPreview();
+    showPhase(3);
   }catch(err){
-    scanStatus.textContent="❌ Invalid QR";
-    scanStatus.style.color="#dc2626";
+    scanStatus.textContent = "❌ Invalid QR";
+    scanStatus.style.color = "#dc2626";
     console.error(err);
   }
 }
 
 function loadTicketPreview(){
   const box=document.getElementById('ticketBox');
-  box.innerHTML=`
+  box.innerHTML = `
     <p><b>${applicantData.name}</b> (${applicantData.gender})</p>
     <p>From: ${journeyData.source}</p>
     <p>To: ${journeyData.destination}</p>
-    <p>Payment: ${journeyData.paymentType} ${journeyData.amount?"₹"+journeyData.amount:""}</p>
+    <p>Payment: ${journeyData.paymentType} ${journeyData.amount ? "₹"+journeyData.amount : ""}</p>
   `;
 }
 
+/* ---------------------------------------------------
+   ✔ FIXED: POST Ticket Booking to Render backend
+----------------------------------------------------- */
 async function confirmTicket(){
   try{
-    const res=await fetch("http://localhost:5000/bookTicket",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({applicantId:applicantData._id,...journeyData})
+    const res = await fetch("/bookTicket", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        applicantId: applicantData._id,
+        ...journeyData
+      })
     });
-    const data=await res.json();
-    if(data.success){ alert("🎉 Ticket booked successfully!"); location.reload(); }
-    else{ alert("Booking failed"); }
-  }catch(err){ console.error(err); alert("Error booking ticket"); }
+
+    const data = await res.json();
+
+    if(data.success){
+      alert("🎉 Ticket booked successfully!");
+      location.reload();
+    } else {
+      alert("Booking failed");
+    }
+
+  }catch(err){
+    console.error(err);
+    alert("Error booking ticket");
+  }
 }
 
 document.getElementById('paymentType').addEventListener('change',e=>{
-  document.getElementById('amount').style.display=e.target.value==="PAID"?"block":"none";
+  document.getElementById('amount').style.display =
+    e.target.value === "PAID" ? "block" : "none";
 });
 </script>
+
 </body>
 </html>
